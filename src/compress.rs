@@ -264,8 +264,8 @@ fn compress(path: &Path, dictionaries: &[(Dictionary, Dictionary)]) -> Result<Pa
 
                             // if a lot of raw values needs to be written first
                             if missed > VALUES / 2 {
-                                let nr_bytes = bytes_to_rep(missed);
-                                let bytes = val_to_u8_vec(missed, nr_bytes);
+                                let nr_bytes = utility::bytes_to_rep(missed);
+                                let bytes = utility::val_to_u8_vec(missed, nr_bytes);
                                 //writer.write(&[nr_bytes])?;
                                 //writer.write(&bytes)?;
                                 buf_write.push(nr_bytes);
@@ -308,7 +308,7 @@ fn compress(path: &Path, dictionaries: &[(Dictionary, Dictionary)]) -> Result<Pa
                 Err(_e) => {
                     if buf_write.len() > 0 {
                         // add buf_write length to out file as 8 bytes
-                        writer.write(&val_to_u8_vec(
+                        writer.write(&utility::val_to_u8_vec(
                             buf_write.len(),
                             std::mem::size_of::<u64>() as u8,
                         ))?;
@@ -324,7 +324,7 @@ fn compress(path: &Path, dictionaries: &[(Dictionary, Dictionary)]) -> Result<Pa
         }
 
         // add buf_write length to out file as 8 bytes
-        writer.write(&val_to_u8_vec(
+        writer.write(&utility::val_to_u8_vec(
             buf_write.len(),
             std::mem::size_of::<u64>() as u8,
         ))?;
@@ -377,17 +377,4 @@ fn get_comp_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
     let writer = BufWriter::new(file);
 
     Ok((path_comp, writer))
-}
-
-fn bytes_to_rep(value: usize) -> u8 {
-    (std::mem::size_of::<usize>() - ((value.leading_zeros() / 8) as usize)) as u8
-}
-
-fn val_to_u8_vec(value: usize, bytes: u8) -> Vec<u8> {
-    let mut u8_vec: Vec<u8> = Vec::with_capacity(bytes as usize);
-    for byte in (0..bytes).rev() {
-        u8_vec.push((value >> (byte * 8)) as u8);
-    }
-
-    u8_vec
 }
