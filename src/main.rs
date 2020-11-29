@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod compress;
 mod uncompress;
+mod utility;
 
 enum Command<T> {
     Compress(T),

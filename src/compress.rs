@@ -3,6 +3,8 @@ use std::io::prelude::*;
 use std::io::{BufReader, BufWriter, Result, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+use crate::utility;
+
 const VALUE_BITS: u8 = 7;
 const VALUES: usize = 1 << VALUE_BITS;
 const ELEM_SIZE: usize = 2;
@@ -36,7 +38,7 @@ impl DictElem {
     }
 
     pub fn to_string(&self) -> String {
-        let t0 = u8_to_string(self.tuple.0);
+        let t0 = utility::u8_to_string(self.tuple.0);
         /*String = if self.tuple.0 < 0x80 {
                     (self.tuple.0 as char).to_string()
                 } else {
@@ -149,14 +151,6 @@ impl Dictionary {
         }
 
         out_str
-    }
-}
-
-fn u8_to_string(val: u8) -> String {
-    if val < 0x80 {
-        (val as char).to_string()
-    } else {
-        format!("{}", val)
     }
 }
 
