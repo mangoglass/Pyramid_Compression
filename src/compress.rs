@@ -11,7 +11,7 @@ const ELEM_SIZE: usize = 2;
 const ELEM_BITS: u8 = 16;
 const NR_ELEMS: usize = 1 << ELEM_BITS;
 const CHUNK_MAX_SIZE: u64 = 790000;
-const MIN_OCCATIONS: u64 = (ELEM_SIZE * 2) as u64;
+const MIN_OCCATIONS: u64 = 4;
 
 struct DictElem {
     tuple: (u8, u8),
@@ -155,10 +155,27 @@ impl Dictionary {
 }
 
 pub fn run(path: &Path) -> Result<PathBuf> {
-    let dict_collection = generate_dict_collection(path)?;
-    //println!("dict = {:?}", dict);
-    let out_path = compress(path, &dict_collection)?;
-    Ok(out_path)
+    let mut old_path = PathBuf::from(path);
+    let mut new_path = PathBuf::from(path);
+    let mut layers = 0;
+
+    while layers == 0 || utility::file_is_larger(&old_path, &new_path) {
+        // if the layer is above 1 then we are no longer handling the original file
+        if layers > 1 {
+            std::fs::remove_file(&old_path)?;
+        }
+
+        old_path = new_path;
+        let dict_collection = generate_dict_collection(&old_path)?;
+        new_path = compress(&old_path, &dict_collection)?;
+        layers += 1;
+    }
+
+    let final_path = finalize_file(&old_path, layers)?;
+    std::fs::remove_file(&old_path)?;
+    std::fs::remove_file(&new_path)?;
+
+    Ok(final_path)
 }
 
 fn generate_dict_collection(path: &Path) -> Result<Vec<(Dictionary, Dictionary)>> {
@@ -193,7 +210,7 @@ fn generate_dict(path: &Path, offset: u64) -> Result<Dictionary> {
     let mut dict = Dictionary::new();
 
     let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let mut reader = BufReader::new(&file);
     let mut buf = [0u8; ELEM_SIZE];
     let mut counter = [0u32; NR_ELEMS];
 
@@ -222,7 +239,7 @@ fn generate_dict(path: &Path, offset: u64) -> Result<Dictionary> {
 fn compress(path: &Path, dictionaries: &[(Dictionary, Dictionary)]) -> Result<PathBuf> {
     // creater reader, writer, and buffers
     let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let mut reader = BufReader::new(&file);
     let (path_comp, mut writer) = get_comp_writer(path)?;
     let mut buf_read = [0u8; ELEM_SIZE];
     let mut buf_write: Vec<u8> = vec![];
@@ -247,15 +264,15 @@ fn compress(path: &Path, dictionaries: &[(Dictionary, Dictionary)]) -> Result<Pa
         dict_data += 2 + (even_len + odd_len) as u64;
 
         // init variables for dictionary
-        let mut read_ptr = 0u64;
+        let mut read_bytes = 0u64;
         let mut ref_index: usize = 0;
+        let dict_coverage = dict_refs[0].coverage;
 
         // start working through the file
-        let buffer_reads = dict_refs[0].coverage / (ELEM_SIZE as u64);
-        for _ in 0..buffer_reads {
+        while read_bytes < dict_coverage {
             match reader.read_exact(&mut buf_read) {
                 Ok(()) => {
-                    read_ptr += ELEM_SIZE as u64;
+                    read_bytes += ELEM_SIZE as u64;
 
                     match dict_refs[ref_index].get_index(&buf_read) {
                         // matched element in current dict
@@ -298,8 +315,8 @@ fn compress(path: &Path, dictionaries: &[(Dictionary, Dictionary)]) -> Result<Pa
                         None => {
                             buf_missed.push(buf_read[0]);
                             miss_data += 1;
-                            read_ptr -= (ELEM_SIZE / 2) as u64;
-                            reader.seek(SeekFrom::Start(read_ptr))?;
+                            read_bytes -= 1;
+                            reader.seek(SeekFrom::Current(-1))?;
                             ref_index = if ref_index == 0 { 1 } else { 0 };
                         }
                     }
@@ -337,35 +354,39 @@ fn compress(path: &Path, dictionaries: &[(Dictionary, Dictionary)]) -> Result<Pa
     writer.flush()?;
 
     println!(
-        "BEFORE: {}. AFTER {} \n COMPRESSED DATA: {}. UNCOMPRESSED DATA: {}. DICTIONARY DATA: {}",
+        "\n\nBEFORE: {}. AFTER {} \n TOTAL: {}, COMPRESSED: {}. UNCOMPRESSED: {}. DICTIONARY: {}",
         path.metadata()?.len(),
         path_comp.metadata()?.len(),
+        hit_data + miss_data + dict_data,
         hit_data,
         miss_data,
         dict_data
     );
 
-    for dict in dictionaries {
+    /*for dict in dictionaries {
         println!(
             "\nDict 1: {}\n Dict 2: {}\n",
             dict.0.to_string(),
             dict.1.to_string()
         );
-    }
+    }*/
 
     Ok(path_comp)
 }
 
 fn get_comp_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
-    let path_comp = PathBuf::from(format!(
-        "{}.lc",
-        path.file_stem().unwrap().to_str().unwrap()
-    ));
+    let f_ex = path.extension().unwrap().to_str().unwrap();
+    let end_nr = if f_ex.find("tmp") == None {
+        1
+    } else {
+        f_ex.split_at(3).1.parse::<u32>().unwrap()
+    };
 
-    // remove compressed file if it already exists
-    if path_comp.exists() {
-        std::fs::remove_file(&path_comp)?;
-    }
+    let path_comp = PathBuf::from(format!(
+        "{}.tmp{}",
+        path.file_stem().unwrap().to_str().unwrap(),
+        end_nr + 1
+    ));
 
     let file = OpenOptions::new()
         .write(true)
@@ -377,4 +398,42 @@ fn get_comp_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
     let writer = BufWriter::new(file);
 
     Ok((path_comp, writer))
+}
+
+fn finalize_file(path: &Path, nr: usize) -> Result<PathBuf> {
+    let (final_path, mut writer) = get_final_writer(path)?;
+    let mut file = File::open(path)?;
+    let mut buf: Vec<u8> = vec![];
+
+    // load file into buf
+    file.read_to_end(&mut buf)?;
+
+    writer.write(&utility::val_to_u8_vec(nr, 4))?;
+    writer.write(&buf)?;
+    writer.flush()?;
+
+    Ok(final_path)
+}
+
+fn get_final_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
+    let path_final = PathBuf::from(format!(
+        "{}.lc",
+        path.file_stem().unwrap().to_str().unwrap()
+    ));
+
+    // remove compressed file if it already exists
+    if path_final.exists() {
+        std::fs::remove_file(&path_final)?;
+    }
+
+    let file = OpenOptions::new()
+        .write(true)
+        .append(false)
+        .read(true)
+        .create(true)
+        .open(&path_final)?;
+
+    let writer = BufWriter::new(file);
+
+    Ok((path_final, writer))
 }
