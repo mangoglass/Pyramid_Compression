@@ -43,17 +43,7 @@ impl DictElem {
 
     pub fn to_string(&self) -> String {
         let t0 = utility::u8_to_string(self.tuple.0);
-        /*String = if self.tuple.0 < 0x80 {
-                    (self.tuple.0 as char).to_string()
-                } else {
-                    format!("{}", self.tuple.0)
-                };
-        */
-        let t1: String = if self.tuple.1 < 0x80 {
-            (self.tuple.1 as char).to_string()
-        } else {
-            format!("{}", self.tuple.1)
-        };
+        let t1 = utility::u8_to_string(self.tuple.1);
 
         format!(" ( {}, {} ): {} occations", t0, t1, self.occurance)
     }
