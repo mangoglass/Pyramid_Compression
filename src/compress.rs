@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 
 use crate::utility;
 
+const DEBUG: bool = false;
+const DEBUG_DICT: bool = false;
+
 const VALUES: usize = utility::VALUES;
 const ELEM_BYTES: usize = utility::ELEM_BYTES;
 const NR_ELEMS: usize = utility::ELEMS;
@@ -171,6 +174,11 @@ impl Dictionary {
 }
 
 pub fn run(path: &Path) -> Result<PathBuf> {
+    println!(
+        "\nCompressing file: {}",
+        path.file_name().unwrap().to_str().unwrap()
+    );
+
     let mut old_path = PathBuf::from(path);
     let mut new_path = PathBuf::from(path);
     let mut layers = 0;
@@ -277,7 +285,12 @@ fn compress(path: &Path, dicts: &mut [(Dictionary, Dictionary)]) -> Result<PathB
 
     // make sure all buffers are written to file
     writer.flush()?;
-    print_comp_result(false, dicts, path, &path_comp, hits, misses, dict_bytes)?;
+
+    if DEBUG {
+        print_comp_result(
+            DEBUG_DICT, dicts, path, &path_comp, hits, misses, dict_bytes,
+        )?;
+    }
 
     Ok(path_comp)
 }
@@ -387,17 +400,19 @@ fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &mut Vec<u8>, miss_data: &m
 
 fn get_path_and_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
     let f_ex = path.extension().unwrap().to_str().unwrap();
-    let end_nr = if f_ex.find("tmp") == None {
-        1
-    } else {
-        f_ex.split_at(3).1.parse::<u32>().unwrap()
-    };
+    let is_tmp = f_ex.find("tmp") != None;
+    let f_st: &str;
 
-    let path_comp = PathBuf::from(format!(
-        "{}.tmp{}",
-        path.file_stem().unwrap().to_str().unwrap(),
-        end_nr + 1
-    ));
+    let mut end_nr = 1;
+
+    if is_tmp {
+        end_nr += f_ex.split_at(3).1.parse::<u32>().unwrap();
+        f_st = path.file_stem().unwrap().to_str().unwrap();
+    } else {
+        f_st = path.to_str().unwrap();
+    }
+
+    let path_comp = PathBuf::from(format!("{}.tmp{}", f_st, end_nr));
 
     let file = OpenOptions::new()
         .write(true)
@@ -488,10 +503,8 @@ fn finalize_file(path: &Path, nr: usize) -> Result<PathBuf> {
 }
 
 fn get_final_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
-    let path_final = PathBuf::from(format!(
-        "{}.lc",
-        path.file_stem().unwrap().to_str().unwrap()
-    ));
+    let stem = path.file_stem().unwrap().to_str().unwrap();
+    let path_final = PathBuf::from(format!("{}.lc", stem));
 
     // remove compressed file if it already exists
     if path_final.exists() {
