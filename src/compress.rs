@@ -5,13 +5,11 @@ use std::path::{Path, PathBuf};
 
 use crate::utility;
 
-const VALUE_BITS: u8 = 7;
-const VALUES: usize = 1 << VALUE_BITS;
-const ELEM_SIZE: usize = 2;
-const ELEM_BITS: u8 = 16;
-const NR_ELEMS: usize = 1 << ELEM_BITS;
-const CHUNK_MAX_SIZE: u64 = 790000;
-const MIN_OCCATIONS: u64 = 4;
+const VALUES: usize = utility::VALUES;
+const ELEM_SIZE: usize = utility::ELEM_SIZE;
+const NR_ELEMS: usize = utility::NR_ELEMS;
+const CHUNK_MAX_SIZE: u64 = utility::CHUNK_MAX_SIZE;
+const MIN_OCCATIONS: u64 = utility::MIN_OCCATIONS;
 
 struct DictElem {
     tuple: (u8, u8),

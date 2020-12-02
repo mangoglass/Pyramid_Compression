@@ -1,5 +1,13 @@
 use std::path::Path;
 
+pub const VALUE_BITS: u8 = 7;
+pub const VALUES: usize = 1 << VALUE_BITS;
+pub const ELEM_SIZE: usize = 2;
+pub const ELEM_BITS: u8 = 16;
+pub const NR_ELEMS: usize = 1 << ELEM_BITS;
+pub const CHUNK_MAX_SIZE: u64 = 790000;
+pub const MIN_OCCATIONS: u64 = 4;
+
 pub fn u8_to_string(val: u8) -> String {
     if val < 0x80 {
         (val as char).to_string()
