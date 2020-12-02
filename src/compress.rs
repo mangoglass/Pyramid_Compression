@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use crate::utility;
 
 const VALUES: usize = utility::VALUES;
-const ELEM_SIZE: usize = utility::ELEM_SIZE;
-const NR_ELEMS: usize = utility::NR_ELEMS;
+const ELEM_BYTES: usize = utility::ELEM_BYTES;
+const NR_ELEMS: usize = utility::ELEMS;
 const CHUNK_MAX_SIZE: u64 = utility::CHUNK_MAX_SIZE;
 const MIN_OCCATIONS: u64 = utility::MIN_OCCATIONS;
 
@@ -17,10 +17,10 @@ struct DictElem {
     useage: u64,
 }
 impl DictElem {
-    pub fn new(arr: (u8, u8), occ: Option<u64>) -> Self {
+    pub fn new(arr: (u8, u8), occ: u64) -> Self {
         DictElem {
             tuple: arr,
-            occurance: occ.unwrap_or(1),
+            occurance: occ,
             useage: 0,
         }
     }
@@ -122,7 +122,7 @@ impl Dictionary {
         }
     }
 
-    pub fn get_index(&self, input: &[u8; ELEM_SIZE]) -> Option<u8> {
+    pub fn get_index(&self, input: &[u8; ELEM_BYTES]) -> Option<u8> {
         for i in 0..self.elems.len() {
             if self.elems[i].eq_array(input) {
                 return Some(i as u8);
@@ -234,21 +234,19 @@ fn generate_dict_pair(path: &Path, offset: u64) -> Result<(Dictionary, Dictionar
 
 fn generate_dict(path: &Path, offset: u64) -> Result<Dictionary> {
     let mut dict = Dictionary::new();
-
-    let file = File::open(path)?;
-    let mut reader = BufReader::new(&file);
-    let mut buf = [0u8; ELEM_SIZE];
+    let mut reader = BufReader::new(File::open(path)?);
+    let mut buf = [0u8; ELEM_BYTES];
     let mut counter = [0u32; NR_ELEMS];
 
     reader.seek(SeekFrom::Start(offset))?;
-    let nr_reads = CHUNK_MAX_SIZE / ELEM_SIZE as u64;
+    let nr_reads = CHUNK_MAX_SIZE / ELEM_BYTES as u64;
 
     for _ in 0..nr_reads {
         match reader.read_exact(&mut buf) {
             Ok(()) => {
                 let index = ((buf[0] as usize) << 8) | (buf[1] as usize);
                 counter[index] += 1;
-                let dict_elem = DictElem::new((buf[0], buf[1]), Some(counter[index] as u64));
+                let dict_elem = DictElem::new((buf[0], buf[1]), counter[index] as u64);
                 dict.consider(dict_elem);
             }
 
@@ -301,7 +299,7 @@ fn compress_loop(
     writer: &mut BufWriter<std::fs::File>,
 ) -> Result<(u64, u64, u64)> {
     // init buffers
-    let mut buf_read = [0u8; ELEM_SIZE];
+    let mut buf_read = [0u8; ELEM_BYTES];
     let mut buf_write: Vec<u8> = vec![];
     let mut buf_missed: Vec<u8> = vec![];
 
@@ -317,7 +315,7 @@ fn compress_loop(
     while read_bytes < dict_coverage {
         match reader.read_exact(&mut buf_read) {
             Ok(()) => {
-                read_bytes += ELEM_SIZE as u64;
+                read_bytes += ELEM_BYTES as u64;
 
                 match dict_refs[ref_index].get_index(&buf_read) {
                     // matched element in current dict

@@ -1,10 +1,11 @@
 use std::path::Path;
 
-pub const VALUE_BITS: u8 = 7;
+pub const ELEM_BYTES: usize = 2;
+pub const ELEM_HALF: usize = ELEM_BYTES / 2;
+pub const ELEM_BITS: u8 = (ELEM_BYTES * 8) as u8;
+pub const ELEMS: usize = 1 << ELEM_BITS;
+pub const VALUE_BITS: u8 = ((ELEM_HALF * 8) - 1) as u8;
 pub const VALUES: usize = 1 << VALUE_BITS;
-pub const ELEM_SIZE: usize = 2;
-pub const ELEM_BITS: u8 = 16;
-pub const NR_ELEMS: usize = 1 << ELEM_BITS;
 pub const CHUNK_MAX_SIZE: u64 = 790000;
 pub const MIN_OCCATIONS: u64 = 4;
 
