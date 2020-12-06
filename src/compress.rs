@@ -487,7 +487,7 @@ fn print_comp_result(
     Ok(())
 }
 
-fn finalize_file(path: &Path, nr: usize) -> Result<PathBuf> {
+fn finalize_file(path: &Path, layers: usize) -> Result<PathBuf> {
     let (final_path, mut writer) = get_final_writer(path)?;
     let mut file = File::open(path)?;
     let mut buf: Vec<u8> = vec![];
@@ -495,7 +495,7 @@ fn finalize_file(path: &Path, nr: usize) -> Result<PathBuf> {
     // load file into buf
     file.read_to_end(&mut buf)?;
 
-    writer.write(&utility::val_to_u8_vec(nr, 4))?;
+    writer.write(&utility::val_to_u8_vec(layers, 4))?;
     writer.write(&buf)?;
     writer.flush()?;
 
