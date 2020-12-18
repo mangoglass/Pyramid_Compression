@@ -14,6 +14,9 @@ const NR_ELEMS: usize = utility::ELEMS;
 const CHUNK_MAX_SIZE: u64 = utility::CHUNK_MAX_SIZE;
 const MIN_OCCATIONS: u64 = utility::MIN_OCCATIONS;
 
+type Reader = utility::Reader;
+type Writer = utility::Writer;
+
 struct DictElem {
     tuple: (u8, u8),
     occurance: u64,
@@ -298,8 +301,8 @@ fn compress(path: &Path, dicts: &mut [(Dictionary, Dictionary)]) -> Result<PathB
 fn compress_loop(
     dry_run: bool,
     dict_refs: &mut [&mut Dictionary; 2],
-    reader: &mut BufReader<std::fs::File>,
-    writer: &mut BufWriter<std::fs::File>,
+    reader: &mut Reader,
+    writer: &mut Writer,
 ) -> Result<(u64, u64, u64)> {
     // init buffers
     let mut buf_read = [0u8; ELEM_BYTES];
@@ -428,7 +431,7 @@ fn get_path_and_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
 
 fn write_to_comp_file(
     buf_write: &[u8],
-    writer: &mut BufWriter<std::fs::File>,
+    writer: &mut Writer,
     dict_eve: &Dictionary,
     dict_odd: &Dictionary,
 ) -> Result<()> {
