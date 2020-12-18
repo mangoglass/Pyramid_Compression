@@ -436,14 +436,12 @@ fn write_to_comp_file(
     dict_eve: &Dictionary,
     dict_odd: &Dictionary,
 ) -> Result<()> {
-    // add dictionary pair to file
-    let even_len = dict_eve.len();
-    let odd_len = dict_odd.len();
     let mut buf_final: Vec<u8> = vec![];
 
-    buf_final.push(even_len);
-    buf_final.push(odd_len);
+    // add dictionary pair to file
+    buf_final.push(dict_eve.len());
     buf_final.extend(dict_eve.to_vec());
+    buf_final.push(dict_odd.len());
     buf_final.extend(&dict_odd.to_vec());
 
     // move buf_write data to buf_final
