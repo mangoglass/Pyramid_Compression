@@ -199,7 +199,11 @@ pub fn run(path: &Path) -> Result<PathBuf> {
     }
 
     let final_path = finalize_file(&old_path, layers)?;
-    std::fs::remove_file(&old_path)?;
+    // only remove old file if there is more than one layer
+    if layers > 1 {
+        std::fs::remove_file(&old_path)?;
+    }
+
     std::fs::remove_file(&new_path)?;
 
     Ok(final_path)
