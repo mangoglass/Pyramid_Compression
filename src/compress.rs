@@ -503,6 +503,14 @@ fn finalize_file(path: &Path, layers: usize) -> Result<PathBuf> {
     writer.write(&buf)?;
     writer.flush()?;
 
+    if DEBUG {
+        println!(
+            "\nFinal file: {} bytes with {} layers",
+            4 + buf.len(),
+            layers
+        );
+    }
+
     Ok(final_path)
 }
 
