@@ -450,9 +450,11 @@ fn write_to_comp_file(
     // move buf_write data to buf_final
     buf_final.extend(buf_write);
 
-    // add buf_write length to out file as 8 bytes
-    let bytes = std::mem::size_of::<u64>() as u8;
-    writer.write(&utility::val_to_u8_vec(buf_final.len(), bytes))?;
+    // add buf_write length to out file as 4 bytes
+    let bytes = 4;
+    let len = bytes + buf_final.len();
+
+    writer.write(&utility::val_to_u8_vec(len, bytes as u8))?;
 
     // add buf_write content to out file
     writer.write(&buf_final)?;
