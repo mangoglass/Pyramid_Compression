@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use crate::utility;
 
-const DEBUG: bool = false;
-const DEBUG_DICT: bool = false;
+const DEBUG: bool = utility::DEBUG;
+const DEBUG_DICT: bool = utility::DEBUG_DICT;
 
 const VALUES: usize = utility::VALUES;
 const ELEM_BYTES: usize = utility::ELEM_BYTES;
