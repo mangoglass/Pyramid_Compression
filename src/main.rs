@@ -21,7 +21,7 @@ fn main() -> Result<()> {
         Command::Uncompress(f) => uncompress::run(f)?,
     };
 
-    println!("Resulting file: {}", path.to_str().unwrap());
+    println!("Output: {}", path.to_str().unwrap());
     Ok(())
 }
 
