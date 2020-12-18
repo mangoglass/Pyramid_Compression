@@ -306,6 +306,8 @@ fn compress_loop(
     reader: &mut Reader,
     writer: &mut Writer,
 ) -> Result<(u64, u64, u64)> {
+    let dict_bytes = 2 + (2 * dict_refs[0].len() + 2 * dict_refs[1].len()) as u64;
+
     // init buffers
     let mut buf_read = [0u8; ELEM_BYTES];
     let mut buf_write: Vec<u8> = vec![];
@@ -314,7 +316,6 @@ fn compress_loop(
     // init variables for dictionary
     let mut hits = 0u64;
     let mut misses = 0u64;
-    let mut dict_bytes = 0u64;
     let mut read_bytes = 0u64;
     let mut ref_index: usize = 0;
     let dict_coverage = dict_refs[0].coverage;
@@ -358,7 +359,6 @@ fn compress_loop(
                 // reached end of file
                 if !dry_run && buf_write.len() > 0 {
                     write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
-                    dict_bytes += 2 + (dict_refs[0].len() + dict_refs[1].len()) as u64;
                 } else if dry_run {
                     reader.seek(SeekFrom::Current(-(read_bytes as i64)))?;
                 }
@@ -370,7 +370,6 @@ fn compress_loop(
 
     if !dry_run && buf_write.len() > 0 {
         write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
-        dict_bytes += 2 + (dict_refs[0].len() + dict_refs[1].len()) as u64;
     } else if dry_run {
         reader.seek(SeekFrom::Current(-(read_bytes as i64)))?;
     }
