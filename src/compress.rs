@@ -469,7 +469,7 @@ fn print_comp_result(
     dict_data: u64,
 ) -> Result<()> {
     println!(
-        "\n\nBEFORE: {}. AFTER {} \n TOTAL: {}, COMPRESSED: {}. UNCOMPRESSED: {}. DICTIONARY: {}",
+        "\n\nBEFORE: {}. AFTER: {} \nTOTAL: {}, COMPRESSED: {}. UNCOMPRESSED: {}. DICTIONARY: {}",
         path.metadata()?.len(),
         path_comp.metadata()?.len(),
         hit_data + miss_data + dict_data,
