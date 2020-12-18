@@ -294,9 +294,7 @@ fn compress(path: &Path, dicts: &mut [(Dictionary, Dictionary)]) -> Result<PathB
     writer.flush()?;
 
     if DEBUG {
-        print_comp_result(
-            DEBUG_DICT, dicts, path, &path_comp, hits, misses, dict_bytes,
-        )?;
+        print_comp_result(dicts, path, &path_comp, hits, misses, dict_bytes)?;
     }
 
     Ok(path_comp)
@@ -463,7 +461,6 @@ fn write_to_comp_file(
 }
 
 fn print_comp_result(
-    print_dict_data: bool,
     dictionaries: &[(Dictionary, Dictionary)],
     path: &Path,
     path_comp: &Path,
@@ -481,7 +478,7 @@ fn print_comp_result(
         dict_data
     );
 
-    if print_dict_data {
+    if DEBUG_DICT {
         for dict in dictionaries {
             println!(
                 "\nDict 1: {}\n Dict 2: {}\n",
