@@ -358,6 +358,7 @@ fn compress_loop(
             Err(_e) => {
                 // reached end of file
                 if !dry_run && buf_write.len() > 0 {
+                    write_missed(&mut buf_write, &mut buf_missed, &mut misses);
                     write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
                 } else if dry_run {
                     reader.seek(SeekFrom::Current(-(read_bytes as i64)))?;
@@ -369,6 +370,7 @@ fn compress_loop(
     }
 
     if !dry_run && buf_write.len() > 0 {
+        write_missed(&mut buf_write, &mut buf_missed, &mut misses);
         write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
     } else if dry_run {
         reader.seek(SeekFrom::Current(-(read_bytes as i64)))?;
