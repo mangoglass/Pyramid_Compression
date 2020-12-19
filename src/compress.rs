@@ -470,13 +470,14 @@ fn print_comp_result(
     dict_data: u64,
 ) -> Result<()> {
     println!(
-        "\n\nBEFORE: {}. AFTER: {} \nTOTAL: {}, COMPRESSED: {}. UNCOMPRESSED: {}. DICTIONARY: {}",
+        "\n\nBEFORE: {}. AFTER: {} \nTOTAL: {}, COMPRESSED: {}. UNCOMPRESSED: {}. DICTIONARY: {}, OVERHEAD: {}",
         path.metadata()?.len(),
         path_comp.metadata()?.len(),
-        hit_data + miss_data + dict_data,
+        hit_data + miss_data + dict_data + (dictionaries.len() * 4) as u64,
         hit_data,
         miss_data,
-        dict_data
+        dict_data,
+        dictionaries.len() * 4
     );
 
     if DEBUG_DICT {
