@@ -22,4 +22,5 @@ Cargo.lock
 
 # Pyramid Compression
 *.lc
+*.tmp*
 *.txt
