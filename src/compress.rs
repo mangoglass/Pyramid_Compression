@@ -185,8 +185,9 @@ pub fn run(path: &Path) -> Result<PathBuf> {
     let mut old_path = PathBuf::from(path);
     let mut new_path = PathBuf::from(path);
     let mut layers = 0;
+    let mut continue_compress = true;
 
-    while layers == 0 || utility::file_is_larger(&old_path, &new_path) {
+    while continue_compress {
         // if the layer is above 1 then remove temporary file
         if layers > 1 {
             std::fs::remove_file(&old_path)?;
@@ -194,8 +195,10 @@ pub fn run(path: &Path) -> Result<PathBuf> {
 
         old_path = new_path;
         let mut dict_collection = generate_dict_collection(&old_path)?;
-        new_path = compress(&old_path, &mut dict_collection)?;
-        layers += 1;
+        new_path = compress_layer(&old_path, &mut dict_collection)?;
+
+        continue_compress = utility::file_is_larger(&old_path, &new_path);
+        layers += if continue_compress { 1 } else { 0 };
     }
 
     let final_path = finalize_file(&old_path, layers)?;
