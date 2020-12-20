@@ -269,7 +269,7 @@ fn generate_dict(path: &Path, offset: u64) -> Result<Dictionary> {
     Ok(dict)
 }
 
-fn compress(path: &Path, dicts: &mut [(Dictionary, Dictionary)]) -> Result<PathBuf> {
+fn compress_layer(path: &Path, dicts: &mut [(Dictionary, Dictionary)]) -> Result<PathBuf> {
     // creater reader, writer, and buffers
     let mut reader = BufReader::new(File::open(path)?);
     let (path_comp, mut writer) = get_path_and_writer(path)?;
