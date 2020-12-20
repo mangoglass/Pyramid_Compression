@@ -396,7 +396,7 @@ fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &mut Vec<u8>, overhead: &mu
     let missed = buf_missed.len();
 
     // if a lot of raw values needs to be written first
-    if missed > VALUES / 2 {
+    if missed > 0b00111111 {
         let nr_bytes = utility::bytes_to_rep(missed);
         let bytes = utility::val_to_u8_vec(missed, nr_bytes);
         buf_write.push(nr_bytes);
