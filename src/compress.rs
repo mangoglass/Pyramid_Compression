@@ -335,49 +335,47 @@ fn compress_chunk(
 
     // start working through the file
     while read_bytes < dict_coverage {
-        match reader.read_exact(&mut buf_read) {
-            Ok(()) => {
-                read_bytes += ELEM_BYTES as u64;
-
-                match dict_refs[ref_index].get_index(&buf_read) {
-                    // matched element in current dict
-                    Some(elem_index) => {
-                        if dry_run {
-                            // increment usage of index
-                            dict_refs[ref_index].increment_useage(elem_index as usize);
-                        } else {
-                            // add missed bytes to write_buf
-                            write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
-                            // add element index to file
-                            buf_write.push((1 << 7) | elem_index);
-                            hits += 1;
-                        }
-                    }
-
-                    // did not match element in current dict
-                    None => {
-                        reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
-                        ref_index = if ref_index == 0 { 1 } else { 0 };
-                        read_bytes -= ELEM_HALF as u64;
-
-                        if !dry_run {
-                            buf_missed.extend(&buf_read[0..ELEM_HALF]);
-                            misses += 1;
-                        }
-                    }
-                }
+        // if less remains of the chunk than can be read into the buf_read buffer
+        if (dict_coverage - read_bytes) < ELEM_BYTES as u64 {
+            if !dry_run {
+                let mut buf_rest = vec![0u8; (dict_coverage - read_bytes) as usize];
+                reader.read_exact(&mut buf_rest)?;
+                buf_missed.extend(&buf_rest);
             }
 
-            Err(_e) => {
-                // reached end of file
-                if !dry_run && buf_write.len() > 0 {
-                    write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
-                    write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
-                } else if dry_run {
-                    reader.seek(SeekFrom::Current(-(read_bytes as i64)))?;
+            // we can not read any more bytes from this chunk, so break out of the while loop
+            break;
+        }
+
+        if let Ok(_) = reader.read_exact(&mut buf_read) {
+            read_bytes += ELEM_BYTES as u64;
+
+            match dict_refs[ref_index].get_index(&buf_read) {
+                // matched element in current dict
+                Some(elem_index) => {
+                    if dry_run {
+                        // increment usage of index
+                        dict_refs[ref_index].increment_useage(elem_index as usize);
+                    } else {
+                        // add missed bytes to write_buf
+                        write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
+                        // add element index to file
+                        buf_write.push((1 << 7) | elem_index);
+                        hits += 1;
+                    }
                 }
 
-                return Ok((hits, misses, overhead));
+                // did not match element in current dict
+                None => {
+                    reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
+                    ref_index = if ref_index == 0 { 1 } else { 0 };
+                    read_bytes -= ELEM_HALF as u64;
+
+                    if !dry_run {
+                        buf_missed.extend(&buf_read[0..ELEM_HALF]);
+                        misses += 1;
+                    }
+                }
             }
         }
     }
