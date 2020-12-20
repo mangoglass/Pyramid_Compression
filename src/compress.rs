@@ -330,6 +330,9 @@ fn compress_chunk(
     let mut ref_index: usize = 0;
     let dict_coverage = dict_refs[0].coverage;
 
+    // get start pos for reader to reset in dry run
+    let start_pos = reader.seek(SeekFrom::Current(0))?;
+
     // start working through the file
     while read_bytes < dict_coverage {
         match reader.read_exact(&mut buf_read) {
@@ -383,7 +386,7 @@ fn compress_chunk(
         write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
         write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
     } else if dry_run {
-        reader.seek(SeekFrom::Current(-(read_bytes as i64)))?;
+        reader.seek(SeekFrom::Start(start_pos))?;
     }
 
     Ok((hits, misses, overhead))
