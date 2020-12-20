@@ -470,7 +470,7 @@ fn write_to_comp_file(
     writer.write_all(&chunk_len_buf)?;
 
     // add buf_write content to out file
-    writer.write(&buf_final)?;
+    writer.write_all(&buf_final)?;
 
     Ok(())
 }
