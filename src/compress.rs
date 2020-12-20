@@ -525,7 +525,14 @@ fn finalize_file(path: &Path, layers: u8) -> Result<PathBuf> {
 }
 
 fn get_final_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
-    let stem = path.file_stem().unwrap().to_str().unwrap();
+    let extension = path.extension().unwrap().to_str().unwrap();
+    // if the path has a tmp extension, remove the tmp extension, otherwise keep the file as is
+    let stem = if extension.find("tmp") != None {
+        path.file_stem().unwrap().to_str().unwrap()
+    } else {
+        path.to_str().unwrap()
+    };
+
     let path_final = PathBuf::from(format!("{}.lc", stem));
 
     // remove compressed file if it already exists
