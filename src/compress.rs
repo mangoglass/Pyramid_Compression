@@ -10,6 +10,7 @@ const DEBUG_DICT: bool = utility::DEBUG_DICT;
 
 const VALUES: usize = utility::VALUES;
 const ELEM_BYTES: usize = utility::ELEM_BYTES;
+const ELEM_HALF: usize = utility::ELEM_HALF;
 const NR_ELEMS: usize = utility::ELEMS;
 const CHUNK_MAX_SIZE: u64 = utility::CHUNK_MAX_SIZE;
 const MIN_OCCATIONS: u64 = utility::MIN_OCCATIONS;
@@ -352,12 +353,12 @@ fn compress_chunk(
 
                     // did not match element in current dict
                     None => {
-                        reader.seek(SeekFrom::Current(-1))?;
+                        reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
                         ref_index = if ref_index == 0 { 1 } else { 0 };
-                        read_bytes -= 1;
+                        read_bytes -= ELEM_HALF as u64;
 
                         if !dry_run {
-                            buf_missed.push(buf_read[0]);
+                            buf_missed.extend(&buf_read[0..ELEM_HALF]);
                             misses += 1;
                         }
                     }
