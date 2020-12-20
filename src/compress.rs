@@ -465,8 +465,9 @@ fn write_to_comp_file(
     // add buf_write length to out file as 4 bytes
     let bytes = 4;
     let len = bytes + buf_final.len();
+    let chunk_len_buf = utility::val_to_u8_vec(len, bytes as u8);
 
-    writer.write(&utility::val_to_u8_vec(len, bytes as u8))?;
+    writer.write_all(&chunk_len_buf)?;
 
     // add buf_write content to out file
     writer.write(&buf_final)?;
