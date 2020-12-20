@@ -277,41 +277,45 @@ fn compress_layer(path: &Path, dicts: &mut [(Dictionary, Dictionary)]) -> Result
     let mut hits: u64 = 0;
     let mut misses: u64 = 0;
     let mut dict_bytes: u64 = 0;
+    let mut overhead: u64 = (dicts.len() * 4) as u64;
 
     for dict_index in 0..dicts.len() {
         // init dictionary references
         let mut dict_refs = [&mut dicts[dict_index].0, &mut dicts[dict_index].1];
 
         // dry run
-        compress_loop(true, &mut dict_refs, &mut reader, &mut writer)?;
+        compress_chunk(true, &mut dict_refs, &mut reader, &mut writer)?;
+
+        //remove unused elements from dictionaries to save extra space
         dict_refs[0].purge_unused();
         dict_refs[1].purge_unused();
 
+        // 1 bytes overhead for each dictionary, and each element uses 2 bytes
+        dict_bytes += 2 + 2 * dict_refs[0].len() as u64 + 2 * dict_refs[1].len() as u64;
+
         // real run
-        let (h, m, d) = compress_loop(false, &mut dict_refs, &mut reader, &mut writer)?;
+        let (h, m, o) = compress_chunk(false, &mut dict_refs, &mut reader, &mut writer)?;
         hits += h;
         misses += m;
-        dict_bytes += d;
+        overhead += o;
     }
 
     // make sure all buffers are written to file
     writer.flush()?;
 
     if DEBUG {
-        print_comp_result(dicts, path, &path_comp, hits, misses, dict_bytes)?;
+        print_comp_result(dicts, path, &path_comp, hits, misses, dict_bytes, overhead)?;
     }
 
     Ok(path_comp)
 }
 
-fn compress_loop(
+fn compress_chunk(
     dry_run: bool,
     dict_refs: &mut [&mut Dictionary; 2],
     reader: &mut Reader,
     writer: &mut Writer,
 ) -> Result<(u64, u64, u64)> {
-    let dict_bytes = 2 + (2 * dict_refs[0].len() + 2 * dict_refs[1].len()) as u64;
-
     // init buffers
     let mut buf_read = [0u8; ELEM_BYTES];
     let mut buf_write: Vec<u8> = vec![];
@@ -320,6 +324,7 @@ fn compress_loop(
     // init variables for dictionary
     let mut hits = 0u64;
     let mut misses = 0u64;
+    let mut overhead = 0u64;
     let mut read_bytes = 0u64;
     let mut ref_index: usize = 0;
     let dict_coverage = dict_refs[0].coverage;
@@ -338,7 +343,7 @@ fn compress_loop(
                             dict_refs[ref_index].increment_useage(elem_index as usize);
                         } else {
                             // add missed bytes to write_buf
-                            write_missed(&mut buf_write, &mut buf_missed, &mut misses);
+                            write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
                             // add element index to file
                             buf_write.push((1 << 7) | elem_index);
                             hits += 1;
@@ -362,28 +367,28 @@ fn compress_loop(
             Err(_e) => {
                 // reached end of file
                 if !dry_run && buf_write.len() > 0 {
-                    write_missed(&mut buf_write, &mut buf_missed, &mut misses);
+                    write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
                     write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
                 } else if dry_run {
                     reader.seek(SeekFrom::Current(-(read_bytes as i64)))?;
                 }
 
-                return Ok((hits, misses, dict_bytes));
+                return Ok((hits, misses, overhead));
             }
         }
     }
 
-    if !dry_run && buf_write.len() > 0 {
-        write_missed(&mut buf_write, &mut buf_missed, &mut misses);
+    if !dry_run {
+        write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
         write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
     } else if dry_run {
         reader.seek(SeekFrom::Current(-(read_bytes as i64)))?;
     }
 
-    Ok((hits, misses, dict_bytes))
+    Ok((hits, misses, overhead))
 }
 
-fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &mut Vec<u8>, miss_data: &mut u64) {
+fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &mut Vec<u8>, overhead: &mut u64) {
     let missed = buf_missed.len();
 
     // if a lot of raw values needs to be written first
@@ -392,7 +397,7 @@ fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &mut Vec<u8>, miss_data: &m
         let bytes = utility::val_to_u8_vec(missed, nr_bytes);
         buf_write.push(nr_bytes);
         buf_write.extend(&bytes);
-        *miss_data += (1 + bytes.len()) as u64;
+        *overhead += (1 + bytes.len()) as u64;
 
         buf_write.extend(buf_missed.to_vec());
         buf_missed.clear();
@@ -401,7 +406,7 @@ fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &mut Vec<u8>, miss_data: &m
     else if missed > 0 {
         let miss_byte = ((1 << 6) | missed) as u8;
         buf_write.push(miss_byte);
-        *miss_data += 1;
+        *overhead += 1;
 
         buf_write.extend(buf_missed.to_vec());
         buf_missed.clear();
@@ -472,16 +477,16 @@ fn print_comp_result(
     hit_data: u64,
     miss_data: u64,
     dict_data: u64,
+    overhead_data: u64,
 ) -> Result<()> {
     println!(
-        "\n\nBEFORE: {}. AFTER: {} \nTOTAL: {}, COMPRESSED: {}. UNCOMPRESSED: {}. DICTIONARY: {}, OVERHEAD: {}",
+        "\n\nLAYER RESULT: {} -> {} \nCOMPRESSED: {}. NON-COMPRESSED: {}. DICT: {}, OVERHEAD: {}",
         path.metadata()?.len(),
         path_comp.metadata()?.len(),
-        hit_data + miss_data + dict_data + (dictionaries.len() * 4) as u64,
         hit_data,
         miss_data,
         dict_data,
-        dictionaries.len() * 4
+        overhead_data
     );
 
     if DEBUG_DICT {
