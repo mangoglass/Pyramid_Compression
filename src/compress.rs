@@ -326,19 +326,19 @@ fn compress_chunk(
     let mut hits = 0u64;
     let mut misses = 0u64;
     let mut overhead = 0u64;
-    let mut read_bytes = 0u64;
+    let mut has_read = 0u64;
     let mut ref_index: usize = 0;
-    let dict_coverage = dict_refs[0].coverage;
+    let to_read = dict_refs[0].coverage;
 
     // get start pos for reader to reset in dry run
     let start_pos = reader.seek(SeekFrom::Current(0))?;
 
     // start working through the file
-    while read_bytes < dict_coverage {
+    while has_read < to_read {
         // if less remains of the chunk than can be read into the buf_read buffer
-        if (dict_coverage - read_bytes) < ELEM_BYTES as u64 {
+        if (to_read - has_read) < ELEM_BYTES as u64 {
             if !dry_run {
-                let mut buf_rest = vec![0u8; (dict_coverage - read_bytes) as usize];
+                let mut buf_rest = vec![0u8; (to_read - has_read) as usize];
                 reader.read_exact(&mut buf_rest)?;
                 buf_missed.extend(&buf_rest);
             }
@@ -348,7 +348,7 @@ fn compress_chunk(
         }
 
         if let Ok(_) = reader.read_exact(&mut buf_read) {
-            read_bytes += ELEM_BYTES as u64;
+            has_read += ELEM_BYTES as u64;
 
             match dict_refs[ref_index].get_index(&buf_read) {
                 // matched element in current dict
@@ -369,7 +369,7 @@ fn compress_chunk(
                 None => {
                     reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
                     ref_index = if ref_index == 0 { 1 } else { 0 };
-                    read_bytes -= ELEM_HALF as u64;
+                    has_read -= ELEM_HALF as u64;
 
                     if !dry_run {
                         buf_missed.extend(&buf_read[0..ELEM_HALF]);
