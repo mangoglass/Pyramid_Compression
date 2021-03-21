@@ -19,29 +19,29 @@ type Reader = utility::Reader;
 type Writer = utility::Writer;
 
 struct DictElem {
-    tuple: (u8, u8),
+    data: [u8; ELEM_BYTES],
     occurance: u64,
     useage: u64,
 }
 impl DictElem {
-    pub fn new(arr: (u8, u8), occ: u64) -> Self {
+    pub fn new(arr: [u8; ELEM_BYTES], occ: u64) -> Self {
         DictElem {
-            tuple: arr,
+            data: arr,
             occurance: occ,
             useage: 0,
         }
     }
 
     pub fn eq(&self, o: &DictElem) -> bool {
-        self.tuple.0 == o.tuple.0 && self.tuple.1 == o.tuple.1
+        self.data[0] == o.data[0] && self.data[1] == o.data[1]
     }
 
-    pub fn eq_array(&self, o: &[u8; 2]) -> bool {
-        self.tuple.0 == o[0] && self.tuple.1 == o[1]
+    pub fn eq_array(&self, o: &[u8; ELEM_BYTES]) -> bool {
+        self.data[0] == o[0] && self.data[1] == o[1]
     }
 
-    pub fn increment_occurance(&mut self) {
-        self.occurance += 1;
+    pub fn set_occurance(&mut self, occ: u64) {
+        self.occurance = occ;
     }
 
     pub fn increment_useage(&mut self) {
@@ -49,8 +49,8 @@ impl DictElem {
     }
 
     pub fn to_string(&self) -> String {
-        let t0 = utility::u8_to_string(self.tuple.0);
-        let t1 = utility::u8_to_string(self.tuple.1);
+        let t0 = utility::u8_to_string(self.data[0]);
+        let t1 = utility::u8_to_string(self.data[1]);
 
         format!(" ( {}, {} ): {} occations", t0, t1, self.occurance)
     }
@@ -100,7 +100,7 @@ impl Dictionary {
             let elem_ref = &mut self.elems[i];
 
             if elem_ref.eq(&elem) {
-                elem_ref.increment_occurance();
+                elem_ref.set_occurance(elem.occurance);
                 if i == self.least.0 {
                     self.redefine_least();
                 }
@@ -117,6 +117,10 @@ impl Dictionary {
             self.replace(elem, self.least.0);
             self.redefine_least();
         }
+    }
+
+    pub fn get(&self, index: u8) -> [u8; ELEM_BYTES] {
+        self.elems[index as usize].data
     }
 
     pub fn get_index(&self, input: &[u8; ELEM_BYTES]) -> Option<u8> {
@@ -151,15 +155,14 @@ impl Dictionary {
         let mut out: Vec<u8> = Vec::with_capacity(self.elems.len() * 2);
 
         for i in 0..self.elems.len() {
-            out.push(self.elems[i].tuple.0);
-            out.push(self.elems[i].tuple.1);
+            out.extend(&self.elems[i].data);
         }
 
         out
     }
 
-    pub fn increment_useage(&mut self, index: usize) {
-        self.elems[index].increment_useage();
+    pub fn increment_useage(&mut self, index: u8) {
+        self.elems[index as usize].increment_useage();
     }
 
     pub fn to_string(&self) -> String {
@@ -256,7 +259,7 @@ fn generate_dict(path: &Path, offset: u64) -> Result<Dictionary> {
             Ok(()) => {
                 let index = ((buf[0] as usize) << 8) | (buf[1] as usize);
                 counter[index] += 1;
-                let dict_elem = DictElem::new((buf[0], buf[1]), counter[index] as u64);
+                let dict_elem = DictElem::new(buf, counter[index] as u64);
                 dict.consider(dict_elem);
             }
 
@@ -312,107 +315,149 @@ fn compress_layer(path: &Path, dicts: &mut [(Dictionary, Dictionary)]) -> Result
 }
 
 fn compress_chunk(
-    dry_run: bool,
-    dict_refs: &mut [&mut Dictionary; 2],
+    dry: bool,
+    dicts: &mut [&mut Dictionary; 2],
     reader: &mut Reader,
     writer: &mut Writer,
 ) -> Result<(u64, u64, u64)> {
     // init buffers
-    let mut buf_read = [0u8; ELEM_BYTES];
-    let mut buf_write: Vec<u8> = vec![];
-    let mut buf_missed: Vec<u8> = vec![];
+    let mut rad_buf = [0u8; ELEM_BYTES];
+    let mut wri_buf: Vec<u8> = vec![];
+    let mut hit_buf: Vec<u8> = vec![];
+    let mut mis_buf: Vec<u8> = vec![];
 
-    // init variables for dictionary
+    // init variables
+    let mut index: usize = 0;
     let mut hits = 0u64;
     let mut misses = 0u64;
     let mut overhead = 0u64;
     let mut has_read = 0u64;
-    let mut ref_index: usize = 0;
-    let to_read = dict_refs[0].coverage;
+    let to_read = dicts[0].coverage;
 
     // get start pos for reader to reset in dry run
     let start_pos = reader.seek(SeekFrom::Current(0))?;
 
     // start working through the file
     while has_read < to_read {
-        // if less remains of the chunk than can be read into the buf_read buffer
+        // if less remains than can be fed into the read buffer
         if (to_read - has_read) < ELEM_BYTES as u64 {
-            if !dry_run {
+            if !dry {
                 let mut buf_rest = vec![0u8; (to_read - has_read) as usize];
                 reader.read_exact(&mut buf_rest)?;
-                buf_missed.extend(&buf_rest);
+                mis_buf.extend(&buf_rest);
             }
 
             // we can not read any more bytes from this chunk, so break out of the while loop
             break;
         }
 
-        if let Ok(_) = reader.read_exact(&mut buf_read) {
+        if let Ok(_) = reader.read_exact(&mut rad_buf) {
             has_read += ELEM_BYTES as u64;
 
-            match dict_refs[ref_index].get_index(&buf_read) {
+            match dicts[index].get_index(&rad_buf) {
                 // matched element in current dict
                 Some(elem_index) => {
-                    if dry_run {
-                        // increment usage of index
-                        dict_refs[ref_index].increment_useage(elem_index as usize);
-                    } else {
-                        // add missed bytes to write_buf
-                        write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
-                        // add element index to file
-                        buf_write.push((1 << 7) | elem_index);
-                        hits += 1;
-                    }
+                    // add element index hits buf
+                    hit_buf.push((1 << 7) | elem_index);
                 }
 
                 // did not match element in current dict
                 None => {
-                    reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
-                    ref_index = if ref_index == 0 { 1 } else { 0 };
-                    has_read -= ELEM_HALF as u64;
+                    let t: (u64, u64);
+                    t = manage_hits(dry, &mut wri_buf, &mut hit_buf, &mut mis_buf, dicts[index]);
+                    hits += t.0;
+                    overhead += t.1;
 
-                    if !dry_run {
-                        buf_missed.extend(&buf_read[0..ELEM_HALF]);
-                        misses += 1;
-                    }
+                    reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
+                    has_read -= ELEM_HALF as u64;
+                    mis_buf.extend(&rad_buf[0..ELEM_HALF]);
+                    misses += 1;
+                    index = if index == 0 { 1 } else { 0 };
                 }
             }
         }
     }
 
-    if !dry_run {
-        write_missed(&mut buf_write, &mut buf_missed, &mut overhead);
-        write_to_comp_file(&buf_write, writer, dict_refs[0], dict_refs[1])?;
-    } else if dry_run {
+    let (h, o) = manage_hits(dry, &mut wri_buf, &mut hit_buf, &mut mis_buf, dicts[index]);
+    hits += h;
+    overhead += o;
+
+    if !dry {
+        write_missed(&mut wri_buf, &mut mis_buf);
+        write_to_comp_file(&wri_buf, writer, dicts[0], dicts[1])?;
+    } else if dry {
         reader.seek(SeekFrom::Start(start_pos))?;
     }
 
     Ok((hits, misses, overhead))
 }
 
-fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &mut Vec<u8>, overhead: &mut u64) {
+fn manage_hits(
+    dry_run: bool,
+    buf_write: &mut Vec<u8>,
+    buf_hits: &mut Vec<u8>,
+    buf_missed: &mut Vec<u8>,
+    dict: &mut Dictionary,
+) -> (u64, u64) {
+    let mut hits = buf_hits.len() as u64;
+    let mut overhead = 0u64;
+
+    // if there are hits to be registered to the write buffer
+    if hits > 1 {
+        hits += hits;
+        if dry_run {
+            increment_useages(buf_hits, dict);
+        } else {
+            overhead += write_missed(buf_write, buf_missed);
+            buf_write.extend(&(*buf_hits));
+        }
+
+        buf_missed.clear();
+        buf_hits.clear();
+    }
+    // otherwise the hits should be counted as misses instead to minimise overhead
+    else if hits > 0 {
+        concatinate_hits_to_misses(buf_missed, buf_hits, dict);
+        buf_hits.clear();
+    }
+
+    (hits, overhead)
+}
+
+fn increment_useages(buf_hits: &[u8], dict: &mut Dictionary) {
+    for i in 0..buf_hits.len() {
+        dict.increment_useage(buf_hits[i] & 0b01111111);
+    }
+}
+
+fn concatinate_hits_to_misses(buf_missed: &mut Vec<u8>, buf_hits: &[u8], dict: &Dictionary) {
+    for i in 0..buf_hits.len() {
+        let raw_data = dict.get(buf_hits[i] & 0b01111111);
+        buf_missed.extend(&raw_data);
+    }
+}
+
+fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &[u8]) -> u64 {
     let missed = buf_missed.len();
+    let mut overhead = 0;
 
     // if a lot of raw values needs to be written first
-    if missed > 0b00111111 {
+    if missed >= VALUES / 2 {
         let nr_bytes = utility::bytes_to_rep(missed);
         let bytes = utility::val_to_u8_vec(missed, nr_bytes);
         buf_write.push(nr_bytes);
         buf_write.extend(&bytes);
-        *overhead += (1 + bytes.len()) as u64;
-
-        buf_write.extend(buf_missed.to_vec());
-        buf_missed.clear();
+        overhead += (1 + bytes.len()) as u64;
     }
     // if only a few raw values needs to be written first
     else if missed > 0 {
         let miss_byte = ((1 << 6) | missed) as u8;
         buf_write.push(miss_byte);
-        *overhead += 1;
-
-        buf_write.extend(buf_missed.to_vec());
-        buf_missed.clear();
+        overhead += 1;
     }
+
+    buf_write.extend(buf_missed.to_vec());
+    overhead
 }
 
 fn get_path_and_writer(path: &Path) -> Result<(PathBuf, BufWriter<File>)> {
