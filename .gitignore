@@ -24,3 +24,6 @@ Cargo.lock
 *.lc
 *.tmp*
 *.txt
+*.mp4
+*.png
+*.jpg
