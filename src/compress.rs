@@ -180,14 +180,14 @@ impl Dictionary {
     }
 }
 
-pub fn run(path: &Path) -> Result<PathBuf> {
+pub fn run(path: &PathBuf) -> Result<PathBuf> {
     println!(
         "\nCompressing file: {}",
         path.file_name().unwrap().to_str().unwrap()
     );
 
-    let mut old_path = PathBuf::from(path);
-    let mut new_path = PathBuf::from(path);
+    let mut old_path = path.to_owned();
+    let mut new_path = path.to_owned();
     let mut layers = 0;
     let mut continue_compress = true;
 

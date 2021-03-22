@@ -73,7 +73,7 @@ impl Dictionary {
     }
 }
 
-pub fn run(path: &Path) -> Result<PathBuf> {
+pub fn run(path: &PathBuf) -> Result<PathBuf> {
     println!(
         "Uncompressing file {}",
         path.file_name().unwrap().to_str().unwrap()

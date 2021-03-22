@@ -1,7 +1,8 @@
-use std::io::Error;
-use std::io::ErrorKind;
 use std::io::Result;
-use std::path::Path;
+use std::path::PathBuf;
+
+extern crate clap;
+use clap::{App, Arg};
 
 mod compress;
 mod uncompress;
@@ -13,8 +14,7 @@ enum Command<T> {
 }
 
 fn main() -> Result<()> {
-    let args = std::env::args().collect();
-    let command = argument_handler(&args)?;
+    let command = argument_handler()?;
 
     let path = match command {
         Command::Compress(f) => compress::run(f)?,
@@ -25,19 +25,40 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn argument_handler(args: &Vec<String>) -> Result<Command<&Path>> {
-    assert_eq!(3, args.len());
-    let f = Path::new(&args[2]);
-    if !f.exists() {
-        Err(Error::new(ErrorKind::NotFound, "File does not exist"))
-    } else if args[1].ne("-c") && args[1].ne("-u") {
-        Err(Error::new(
-            ErrorKind::InvalidInput,
-            "Invalid flag, only \"-c\" or \"-u\" allowed",
-        ))
-    } else if args[1].eq("-c") {
-        Ok(Command::Compress(f))
-    } else {
-        Ok(Command::Uncompress(f))
+fn argument_handler() -> Result<Command<PathBuf>> {
+    let matches = App::new("Pyramid Compression")
+        .version("1.0")
+        .author("Tom Axblad <tom.axblad@gmail.com>")
+        .about("A parallel compression algorithm")
+        .arg(
+            Arg::with_name("compress")
+                .short("c")
+                .long("compress")
+                .required_unless("decompress")
+                .conflicts_with("decompress")
+                .value_name("COMPRESS_FILE")
+                .help("Sets the file to compress")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("decompress")
+                .short("d")
+                .long("decompress")
+                .required_unless("compress")
+                .conflicts_with("compress")
+                .value_name("DECOMPRESS_FILE")
+                .help("Sets the file to decompress")
+                .takes_value(true),
+        )
+        .get_matches();
+
+    let mut command: Command<PathBuf>;
+
+    if let Some(pathStr) = matches.value_of("compress") {
+        command = Command::Compress(PathBuf::from(pathStr));
+    } else if let Some(pathStr) = matches.value_of("decompress") {
+        command = Command::Uncompress(PathBuf::from(pathStr));
     }
+
+    Ok(command)
 }
