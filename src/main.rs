@@ -8,24 +8,29 @@ mod compress;
 mod uncompress;
 mod utility;
 
-enum Command<T> {
-    Compress(T),
-    Uncompress(T),
+#[derive(PartialEq)]
+enum Action {
+    None,
+    Compress,
+    Decompress,
 }
 
 fn main() -> Result<()> {
-    let command = argument_handler()?;
+    let (path, action) = argument_handler()?;
 
-    let path = match command {
-        Command::Compress(f) => compress::run(&f)?,
-        Command::Uncompress(f) => uncompress::run(&f)?,
+    let result_path = match action {
+        Action::Compress => compress::run(&path)?,
+        Action::Decompress => uncompress::run(&path)?,
+        Action::None => PathBuf::from(""),
     };
 
-    println!("Output: {}", path.to_str().unwrap());
+    if action != Action::None {println!("Output: {}", result_path.to_str().unwrap());}
+    else {println!("ERROR");}
+
     Ok(())
 }
 
-fn argument_handler() -> Result<Command<PathBuf>> {
+fn argument_handler() -> Result<(PathBuf, Action)> {
     let matches = App::new("Pyramid Compression")
         .version("1.0")
         .author("Tom Axblad <tom.axblad@gmail.com>")
@@ -52,13 +57,16 @@ fn argument_handler() -> Result<Command<PathBuf>> {
         )
         .get_matches();
 
-    let mut command: Command<PathBuf>;
+    let mut action = Action::None;
+    let mut path_str = "";
 
-    if let Some(pathStr) = matches.value_of("compress") {
-        command = Command::Compress(PathBuf::from(pathStr));
-    } else if let Some(pathStr) = matches.value_of("decompress") {
-        command = Command::Uncompress(PathBuf::from(pathStr));
+    if let Some(pstr) = matches.value_of("compress") {
+        path_str = pstr;
+        action = Action::Compress;
+    } else if let Some(pstr) = matches.value_of("decompress") {
+        path_str = pstr;
+        action = Action::Decompress;
     }
 
-    Ok(command)
+    Ok((PathBuf::from(path_str), action))
 }
