@@ -24,15 +24,18 @@ fn main() -> Result<()> {
         Action::None => PathBuf::from(""),
     };
 
-    if action != Action::None {println!("Output: {}", result_path.to_str().unwrap());}
-    else {println!("ERROR");}
+    if action != Action::None {
+        println!("Output: {}", result_path.to_str().unwrap());
+    } else {
+        println!("ERROR");
+    }
 
     Ok(())
 }
 
 fn argument_handler() -> Result<(PathBuf, Action)> {
     let matches = App::new("Pyramid Compression")
-        .version("1.0")
+        .version("0.1.0")
         .author("Tom Axblad <tom.axblad@gmail.com>")
         .about("A parallel compression algorithm")
         .arg(
@@ -41,8 +44,8 @@ fn argument_handler() -> Result<(PathBuf, Action)> {
                 .long("compress")
                 .required_unless("decompress")
                 .conflicts_with("decompress")
-                .value_name("COMPRESS_FILE")
-                .help("Sets the file to compress")
+                .value_name("FILE")
+                .help("Compresses file")
                 .takes_value(true),
         )
         .arg(
@@ -51,8 +54,8 @@ fn argument_handler() -> Result<(PathBuf, Action)> {
                 .long("decompress")
                 .required_unless("compress")
                 .conflicts_with("compress")
-                .value_name("DECOMPRESS_FILE")
-                .help("Sets the file to decompress")
+                .value_name("FILE")
+                .help("Decompresses file")
                 .takes_value(true),
         )
         .get_matches();
