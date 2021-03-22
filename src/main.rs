@@ -17,8 +17,8 @@ fn main() -> Result<()> {
     let command = argument_handler()?;
 
     let path = match command {
-        Command::Compress(f) => compress::run(f)?,
-        Command::Uncompress(f) => uncompress::run(f)?,
+        Command::Compress(f) => compress::run(&f)?,
+        Command::Uncompress(f) => uncompress::run(&f)?,
     };
 
     println!("Output: {}", path.to_str().unwrap());
