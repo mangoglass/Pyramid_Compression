@@ -21,6 +21,7 @@ Cargo.lock
 .history/
 
 # Pyramid Compression
+/test*
 *.lc
 *.tmp*
 *.txt
