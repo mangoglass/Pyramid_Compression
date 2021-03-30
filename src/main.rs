@@ -1,5 +1,6 @@
 use std::io::Result;
 use std::path::PathBuf;
+use std::time::Instant;
 
 extern crate clap;
 use clap::{App, Arg};
@@ -17,6 +18,7 @@ enum Action {
 
 fn main() -> Result<()> {
     let (path, action) = argument_handler()?;
+    let time = Instant::now();
 
     let result_path = match action {
         Action::Compress => compress::run(&path)?,
@@ -26,6 +28,7 @@ fn main() -> Result<()> {
 
     if action != Action::None {
         println!("Output: {}", result_path.to_str().unwrap());
+        println!("{}ms", time.elapsed().as_micros() as f32 / 1000f32);
     } else {
         println!("ERROR");
     }
