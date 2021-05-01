@@ -5,8 +5,9 @@ use std::time::Instant;
 extern crate clap;
 use clap::{App, Arg};
 
+pub mod comp_structs;
 mod compress;
-mod uncompress;
+mod decompress;
 mod utility;
 
 #[derive(PartialEq)]
@@ -22,7 +23,7 @@ fn main() -> Result<()> {
 
     let result_path = match action {
         Action::Compress => compress::run(&path)?,
-        Action::Decompress => uncompress::run(&path)?,
+        Action::Decompress => decompress::run(&path)?,
         Action::None => PathBuf::from(""),
     };
 

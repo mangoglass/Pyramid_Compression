@@ -4,14 +4,7 @@ use std::io::{BufReader, BufWriter, Result, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use crate::utility;
-
-const DEBUG: bool = utility::DEBUG;
-const DEBUG_DICT: bool = utility::DEBUG_DICT;
-
-const ELEM_BYTES: usize = utility::ELEM_BYTES;
-
-type Reader = utility::Reader;
-type Writer = utility::Writer;
+use crate::utility::{Reader, Writer, DEBUG, DETAILED_DEBUG, DEBUG_DICT, ELEM_BYTES};
 
 struct DictElem {
     data: [u8; ELEM_BYTES],
@@ -23,7 +16,7 @@ impl DictElem {
     }
 
     pub fn to_string(&self) -> String {
-        let mut out: String = String::from("( ");
+        let mut out: String = String::from("[");
         for i in 0..ELEM_BYTES {
             out.push_str(utility::u8_to_string(self.data[i]).as_str());
             // if not last value add a comma after written val
@@ -31,7 +24,7 @@ impl DictElem {
                 out.push_str(", ");
             }
         }
-        out.push_str(")");
+        out.push_str("]");
 
         out
     }
@@ -74,26 +67,21 @@ impl Dictionary {
 }
 
 pub fn run(path: &PathBuf) -> Result<PathBuf> {
-    println!(
-        "Uncompressing file {}",
-        path.file_name().unwrap().to_str().unwrap()
-    );
-
-    let path_uncomp = uncompress(path)?;
-
+    println!("Decompressing file {}", path.file_name().unwrap().to_str().unwrap());
+    let path_uncomp = decompress(path)?;
     Ok(path_uncomp)
 }
 
-fn uncompress(path: &Path) -> Result<PathBuf> {
+fn decompress(path: &Path) -> Result<PathBuf> {
     let mut reader = BufReader::new(File::open(path)?);
     let mut old_path = path.to_path_buf();
     let layers = get_layers(&mut reader)?;
 
     if DEBUG {
-        println!("\nUncompressing {} layers\n", layers);
+        println!("\nDecompressing {} layers\n", layers);
     }
 
-    // if there is no compression, just read file into output to remove added byte in begining
+    // if there is no compression, just read file into output to remove added byte in beginning
     if layers == 0 {
         let (out, mut writer) = get_path_and_writer(path)?;
         let mut buf = vec![];
@@ -104,13 +92,13 @@ fn uncompress(path: &Path) -> Result<PathBuf> {
     }
 
     for layer in 0..layers {
-        let new_path = uncompress_layer(&old_path, &mut reader)?;
+        let new_path = decompress_layer(&old_path, &mut reader)?;
         reader = BufReader::new(File::open(&new_path)?);
 
         if DEBUG {
             let old_l = old_path.metadata()?.len();
             let new_l = new_path.metadata()?.len();
-            println!("\nUncompressed layer {}. {} -> {}", layer, old_l, new_l);
+            println!("\nDecompressed layer {}   {} Bytes -> {} Bytes\n\n", layers - layer, old_l, new_l);
         }
 
         if layer > 0 {
@@ -132,7 +120,7 @@ fn get_layers(reader: &mut Reader) -> Result<u8> {
     Ok(layer_slice[0])
 }
 
-fn uncompress_layer(path: &Path, reader: &mut Reader) -> Result<PathBuf> {
+fn decompress_layer(path: &Path, reader: &mut Reader) -> Result<PathBuf> {
     // get curent pos
     let current = reader.seek(SeekFrom::Current(0))?;
     // get layer bytes (if on layer 0 then current is > 0)
@@ -141,7 +129,7 @@ fn uncompress_layer(path: &Path, reader: &mut Reader) -> Result<PathBuf> {
     reader.seek(SeekFrom::Start(current))?;
 
     if DEBUG {
-        println!("Layer length: {}", bytes_in_layer);
+        println!("Decompressing layer of length {} Bytes", bytes_in_layer);
     }
 
     // set read bytes to current pos in file
@@ -149,14 +137,14 @@ fn uncompress_layer(path: &Path, reader: &mut Reader) -> Result<PathBuf> {
     let (out, mut writer) = get_path_and_writer(path)?;
 
     while bytes_read < bytes_in_layer {
-        bytes_read += uncompress_chunk(&mut writer, reader)?;
+        bytes_read += decompress_chunk(&mut writer, reader)?;
     }
 
     writer.flush()?;
     Ok(out)
 }
 
-fn uncompress_chunk(writer: &mut Writer, reader: &mut Reader) -> Result<u64> {
+fn decompress_chunk(writer: &mut Writer, reader: &mut Reader) -> Result<u64> {
     let mut dicts: Vec<Dictionary> = Vec::new();
     let mut buf_chunk_total = [0u8; 4];
 
@@ -164,13 +152,27 @@ fn uncompress_chunk(writer: &mut Writer, reader: &mut Reader) -> Result<u64> {
     let chunk_total = utility::u8_vec_to_u32(&buf_chunk_total) as u64;
 
     if DEBUG {
-        println! {"1: start of chunk with length {}", chunk_total};
+        let chunk_start = reader.seek(SeekFrom::Current(0))?;
+        let mut chunk_vec = vec![0u8; (chunk_total - 4) as usize];
+        println!("reading {} Bytes", chunk_total - 4);
+        reader.read_exact(&mut chunk_vec)?;
+        reader.seek(SeekFrom::Start(chunk_start))?;
+
+        println!("\nDecompressing chunk of length {} Bytes.\nRaw chunk data:", chunk_total);
+
+        let data_per_line = 12;
+        let mut data_in_line = 0;
+
+        data_in_line = utility::print_chunk_vec(buf_chunk_total.to_vec(), data_per_line, data_in_line);
+        utility::print_chunk_vec(chunk_vec, data_per_line, data_in_line);
+
+        println!("\n");
     }
 
     dicts.push(get_dictionary(reader)?);
     dicts.push(get_dictionary(reader)?);
     let dict_bytes = (2 + (2 * dicts[0].len()) + (2 * dicts[1].len())) as u64;
-    let chunk = chunk_total - dict_bytes - 4;
+    let chunk_length = chunk_total - dict_bytes - 4;
 
     if DEBUG_DICT {
         println!(
@@ -184,9 +186,9 @@ fn uncompress_chunk(writer: &mut Writer, reader: &mut Reader) -> Result<u64> {
     let mut dict_index = 0;
     let mut read = 0;
 
-    while read < chunk {
-        if DEBUG {
-            println! {"4: read = {} , chunk = {}", read, chunk};
+    while read < chunk_length {
+        if DETAILED_DEBUG {
+            print! {"byte {}/{}: ", read, chunk_length};
         }
 
         reader.read_exact(&mut buf)?;
@@ -198,8 +200,8 @@ fn uncompress_chunk(writer: &mut Writer, reader: &mut Reader) -> Result<u64> {
             let index = byte & 0b01111111;
             let dict_element = dicts[dict_index].get(index);
 
-            if DEBUG {
-                println! {"5: hit! index: {} , dict val: {}", index, dicts[dict_index].get_dict_elem(index).to_string()};
+            if DETAILED_DEBUG {
+                println! {"index {} in dict {} {}", index, dict_index,  dicts[dict_index].get_dict_elem(index).to_string()};
             }
 
             writer.write_all(&dict_element)?;
@@ -212,8 +214,8 @@ fn uncompress_chunk(writer: &mut Writer, reader: &mut Reader) -> Result<u64> {
             } else {
                 let mut buf_miss_bytes = vec![0u8; val_part as usize];
 
-                if DEBUG {
-                    println! {"7: to represent value: {}", val_part};
+                if DETAILED_DEBUG {
+                    println! {"bytes to represent missed: {}", val_part};
                 }
 
                 reader.read_exact(&mut buf_miss_bytes)?;
@@ -221,17 +223,17 @@ fn uncompress_chunk(writer: &mut Writer, reader: &mut Reader) -> Result<u64> {
                 utility::u8_vec_to_u64(&buf_miss_bytes) as usize
             };
 
-            if miss_bytes % 2 == 1 {
+            if (miss_bytes) % 2 == 1 {
                 dict_index = if dict_index == 0 { 1 } else { 0 };
             }
 
             let mut buf_miss = vec![0u8; miss_bytes];
+            reader.read_exact(&mut buf_miss)?;
 
-            if DEBUG {
-                println! {"8: missed_bytes: {}", miss_bytes};
+            if DETAILED_DEBUG {
+                println! {"missed {} Bytes: {:?}", miss_bytes, buf_miss};
             }
 
-            reader.read_exact(&mut buf_miss)?;
             read += miss_bytes as u64;
             writer.write_all(&buf_miss)?;
         }
@@ -276,16 +278,10 @@ fn get_dictionary(reader: &mut Reader) -> Result<Dictionary> {
 
     reader.read_exact(&mut buf_short)?;
     let len = buf_short[0];
-    if DEBUG {
-        println! {"2: read dictionary with {} elements", len};
-    }
 
     for _ in 0..len {
         reader.read_exact(&mut buf)?;
         let elem = DictElem::new(buf);
-        if DEBUG {
-            println! {"3: dict elem = {}", elem.to_string()};
-        }
         dict.push(elem);
     }
 

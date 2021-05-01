@@ -3,186 +3,15 @@ use std::io::prelude::*;
 use std::io::{BufReader, BufWriter, Result, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+use crate::comp_structs::{dict_elem::DictElem, dictionary::Dictionary};
 use crate::utility;
-
-const DEBUG: bool = utility::DEBUG;
-const DEBUG_DICT: bool = utility::DEBUG_DICT;
-
-const VALUES: usize = utility::VALUES;
-const ELEM_BYTES: usize = utility::ELEM_BYTES;
-const ELEM_HALF: usize = utility::ELEM_HALF;
-const NR_ELEMS: usize = utility::ELEMS;
-const CHUNK_MAX_SIZE: u64 = utility::CHUNK_MAX_SIZE;
-const MIN_OCCATIONS: u64 = utility::MIN_OCCATIONS;
-
-type Reader = utility::Reader;
-type Writer = utility::Writer;
-
-struct DictElem {
-    data: [u8; ELEM_BYTES],
-    occurance: u64,
-    useage: u64,
-}
-impl DictElem {
-    pub fn new(arr: [u8; ELEM_BYTES], occ: u64) -> Self {
-        DictElem {
-            data: arr,
-            occurance: occ,
-            useage: 0,
-        }
-    }
-
-    pub fn eq(&self, o: &DictElem) -> bool {
-        self.data[0] == o.data[0] && self.data[1] == o.data[1]
-    }
-
-    pub fn eq_array(&self, o: &[u8; ELEM_BYTES]) -> bool {
-        self.data[0] == o[0] && self.data[1] == o[1]
-    }
-
-    pub fn set_occurance(&mut self, occ: u64) {
-        self.occurance = occ;
-    }
-
-    pub fn increment_useage(&mut self) {
-        self.useage += 1;
-    }
-
-    pub fn to_string(&self) -> String {
-        let t0 = utility::u8_to_string(self.data[0]);
-        let t1 = utility::u8_to_string(self.data[1]);
-
-        format!(" ( {}, {} ): {} occations", t0, t1, self.occurance)
-    }
-}
-
-struct Dictionary {
-    elems: Vec<DictElem>,
-    least: (usize, u64),
-    coverage: u64,
-}
-impl Dictionary {
-    pub fn new() -> Self {
-        Dictionary {
-            elems: vec![],
-            least: (0, 1),
-            coverage: CHUNK_MAX_SIZE,
-        }
-    }
-
-    fn push(&mut self, elem: DictElem) {
-        self.elems.push(elem);
-    }
-
-    fn replace(&mut self, elem: DictElem, index: usize) {
-        self.elems[index] = elem;
-    }
-
-    fn redefine_least(&mut self) {
-        let mut tmp_lest = (0usize, std::u64::MAX);
-
-        for i in 0..self.elems.len() {
-            let occ = self.elems[i].occurance;
-            if tmp_lest.1 > occ {
-                tmp_lest = (i, occ);
-            }
-        }
-
-        self.least = tmp_lest;
-    }
-
-    fn full(&self) -> bool {
-        self.elems.len() >= VALUES
-    }
-
-    pub fn consider(&mut self, elem: DictElem) {
-        for i in 0..self.elems.len() {
-            let elem_ref = &mut self.elems[i];
-
-            if elem_ref.eq(&elem) {
-                elem_ref.set_occurance(elem.occurance);
-                if i == self.least.0 {
-                    self.redefine_least();
-                }
-
-                return;
-            }
-        }
-
-        if elem.occurance < MIN_OCCATIONS {
-            return;
-        } else if !self.full() {
-            self.push(elem);
-        } else if elem.occurance > self.least.1 {
-            self.replace(elem, self.least.0);
-            self.redefine_least();
-        }
-    }
-
-    pub fn get(&self, index: u8) -> [u8; ELEM_BYTES] {
-        self.elems[index as usize].data
-    }
-
-    pub fn get_index(&self, input: &[u8; ELEM_BYTES]) -> Option<u8> {
-        for i in 0..self.elems.len() {
-            if self.elems[i].eq_array(input) {
-                return Some(i as u8);
-            }
-        }
-
-        None
-    }
-
-    pub fn purge_unused(&mut self) {
-        let mut indexes_to_remove: Vec<usize> = vec![];
-
-        for i in 0..self.elems.len() {
-            if self.elems[i].useage == 0 {
-                indexes_to_remove.push(i);
-            }
-        }
-
-        for i in (0..indexes_to_remove.len()).rev() {
-            self.elems.remove(indexes_to_remove[i]);
-        }
-    }
-
-    pub fn len(&self) -> u8 {
-        self.elems.len() as u8
-    }
-
-    pub fn to_vec(&self) -> Vec<u8> {
-        let mut out: Vec<u8> = Vec::with_capacity(self.elems.len() * 2);
-
-        for i in 0..self.elems.len() {
-            out.extend(&self.elems[i].data);
-        }
-
-        out
-    }
-
-    pub fn increment_useage(&mut self, index: u8) {
-        self.elems[index as usize].increment_useage();
-    }
-
-    pub fn to_string(&self) -> String {
-        let mut out_str = String::from(format!(
-            "coverage: {} bytes. Elements: {}",
-            self.coverage,
-            self.elems.len()
-        ));
-
-        for i in 0..self.elems.len() {
-            out_str.push_str(format!("\nElem {}: {}", i, self.elems[i].to_string()).as_str());
-        }
-
-        out_str
-    }
-}
+use crate::utility::{
+    Reader, Writer, CHUNK_MAX_SIZE, DEBUG, DETAILED_DEBUG, DEBUG_DICT, ELEM_BYTES, ELEM_HALF, NR_ELEMS, VALUES_HALF,
+};
 
 pub fn run(path: &PathBuf) -> Result<PathBuf> {
     println!(
-        "\nCompressing file: {}",
+        "\nCompressing file: {}\n",
         path.file_name().unwrap().to_str().unwrap()
     );
 
@@ -202,6 +31,7 @@ pub fn run(path: &PathBuf) -> Result<PathBuf> {
         new_path = compress_layer(&old_path, &mut dict_collection)?;
 
         continue_compress = utility::file_is_larger(&old_path, &new_path);
+        //continue_compress = false;
         layers += if continue_compress { 1 } else { 0 };
     }
 
@@ -222,8 +52,8 @@ fn generate_dict_collection(path: &Path) -> Result<Vec<(Dictionary, Dictionary)>
     let file_length = path.metadata()?.len();
     let chunks = 1 + (file_length / CHUNK_MAX_SIZE);
 
-    for i in 0..chunks {
-        let offset = i * CHUNK_MAX_SIZE;
+    for chunk in 0..chunks {
+        let offset = chunk * CHUNK_MAX_SIZE;
         let mut pair = generate_dict_pair(path, offset)?;
 
         let chunk_size = file_length - offset;
@@ -260,7 +90,7 @@ fn generate_dict(path: &Path, offset: u64) -> Result<Dictionary> {
                 let index = ((buf[0] as usize) << 8) | (buf[1] as usize);
                 counter[index] += 1;
                 let dict_elem = DictElem::new(buf, counter[index] as u64);
-                dict.consider(dict_elem);
+                dict.consider(&dict_elem);
             }
 
             Err(_e) => {
@@ -325,6 +155,7 @@ fn compress_chunk(
     let mut wri_buf: Vec<u8> = vec![];
     let mut hit_buf: Vec<u8> = vec![];
     let mut mis_buf: Vec<u8> = vec![];
+    let mut res_buf: Vec<u8> = vec![];
 
     // init variables
     let mut index: usize = 0;
@@ -339,51 +170,60 @@ fn compress_chunk(
 
     // start working through the file
     while has_read < to_read {
+        let left_to_read: usize = (to_read - has_read) as usize;
+
         // if less remains than can be fed into the read buffer
-        if (to_read - has_read) < ELEM_BYTES as u64 {
+        if left_to_read < ELEM_BYTES {
             if !dry {
-                let mut buf_rest = vec![0u8; (to_read - has_read) as usize];
-                reader.read_exact(&mut buf_rest)?;
-                mis_buf.extend(&buf_rest);
+                res_buf = vec![0u8; left_to_read];
+                reader.read_exact(&mut res_buf)?;
             }
 
             // we can not read any more bytes from this chunk, so break out of the while loop
             break;
         }
 
-        if let Ok(_) = reader.read_exact(&mut rad_buf) {
-            has_read += ELEM_BYTES as u64;
+        reader.read_exact(&mut rad_buf)?;
+        has_read += ELEM_BYTES as u64;
 
-            match dicts[index].get_index(&rad_buf) {
-                // matched element in current dict
-                Some(elem_index) => {
-                    // add element index hits buf
-                    hit_buf.push((1 << 7) | elem_index);
+        match dicts[index].get_index(&rad_buf) {
+            // matched element in current dict
+            Some(elem_index) => {
+                // add element index hits buf
+                hit_buf.push((1 << 7) | elem_index);
+            }
+
+            // did not match element in current dict
+            None => {
+                let (h, m, o) = manage_hits(dry, &mut wri_buf, &mut hit_buf, &mut mis_buf, dicts[index]);
+                hits += h;
+                misses += m;
+                overhead += o;
+
+                if !dry && DETAILED_DEBUG && h > 0 {
+                    println!("Writing {} bytes from dictionary {}", h / 2, index);
                 }
 
-                // did not match element in current dict
-                None => {
-                    let t: (u64, u64);
-                    t = manage_hits(dry, &mut wri_buf, &mut hit_buf, &mut mis_buf, dicts[index]);
-                    hits += t.0;
-                    overhead += t.1;
-
-                    reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
-                    has_read -= ELEM_HALF as u64;
-                    mis_buf.extend(&rad_buf[0..ELEM_HALF]);
-                    misses += 1;
-                    index = if index == 0 { 1 } else { 0 };
-                }
+                reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
+                has_read -= ELEM_HALF as u64;
+                mis_buf.extend(&rad_buf[0..ELEM_HALF]);
+                misses += ELEM_HALF as u64;
+                index = if index == 0 { 1 } else { 0 };
             }
         }
     }
 
-    let (h, o) = manage_hits(dry, &mut wri_buf, &mut hit_buf, &mut mis_buf, dicts[index]);
+    let (h, m, o) = manage_hits(dry, &mut wri_buf, &mut hit_buf, &mut mis_buf, dicts[index]);
     hits += h;
+    misses += m;
     overhead += o;
 
+    if !dry && DETAILED_DEBUG && h > 0 {
+        println!("Writing {} bytes from dictionary: {}", h / 2, index);
+    }
+
     if !dry {
-        write_missed(&mut wri_buf, &mut mis_buf);
+        write_missed(&mut wri_buf, &mut res_buf);
         write_to_comp_file(&wri_buf, writer, dicts[0], dicts[1])?;
     } else if dry {
         reader.seek(SeekFrom::Start(start_pos))?;
@@ -398,30 +238,35 @@ fn manage_hits(
     buf_hits: &mut Vec<u8>,
     buf_missed: &mut Vec<u8>,
     dict: &mut Dictionary,
-) -> (u64, u64) {
-    let mut hits = buf_hits.len() as u64;
+) -> (u64, u64, u64) {
+    let hits_len = buf_hits.len() as u64;
+
+    let mut hits = 0u64;
+    let mut misses = 0u64;
     let mut overhead = 0u64;
 
     // if there are hits to be registered to the write buffer
-    if hits > 1 {
-        hits += hits;
+    if hits_len > 1 {
+        hits = hits_len * 2;
         if dry_run {
             increment_useages(buf_hits, dict);
         } else {
-            overhead += write_missed(buf_write, buf_missed);
-            buf_write.extend(&(*buf_hits));
+            overhead = write_missed(buf_write, buf_missed);
+            buf_write.extend(buf_hits.as_slice());
         }
 
         buf_missed.clear();
         buf_hits.clear();
     }
+
     // otherwise the hits should be counted as misses instead to minimise overhead
-    else if hits > 0 {
+    else if hits_len > 0 {
+        misses = hits_len * 2;
         concatinate_hits_to_misses(buf_missed, buf_hits, dict);
         buf_hits.clear();
     }
 
-    (hits, overhead)
+    (hits, misses, overhead)
 }
 
 fn increment_useages(buf_hits: &[u8], dict: &mut Dictionary) {
@@ -442,7 +287,7 @@ fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &[u8]) -> u64 {
     let mut overhead = 0;
 
     // if a lot of raw values needs to be written first
-    if missed >= VALUES / 2 {
+    if missed >= VALUES_HALF {
         let nr_bytes = utility::bytes_to_rep(missed);
         let bytes = utility::val_to_u8_vec(missed, nr_bytes);
         buf_write.push(nr_bytes);
@@ -454,6 +299,10 @@ fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &[u8]) -> u64 {
         let miss_byte = ((1 << 6) | missed) as u8;
         buf_write.push(miss_byte);
         overhead += 1;
+    }
+
+    if DETAILED_DEBUG {
+        println!("Missed {} Byte(s): {:?}", buf_missed.len(), buf_missed);
     }
 
     buf_write.extend(buf_missed.to_vec());
@@ -500,7 +349,9 @@ fn write_to_comp_file(
     buf_final.push(dict_eve.len());
     buf_final.extend(dict_eve.to_vec());
     buf_final.push(dict_odd.len());
-    buf_final.extend(&dict_odd.to_vec());
+    buf_final.extend(dict_odd.to_vec());
+
+
 
     // move buf_write data to buf_final
     buf_final.extend(buf_write);
@@ -515,6 +366,18 @@ fn write_to_comp_file(
     // add buf_write content to out file
     writer.write_all(&buf_final)?;
 
+    if DEBUG {
+        println!("\nWriting chunk of length {} Bytes to file.\nRaw chunk data:", len);
+
+        let data_per_line = 12;
+        let mut data_in_line = 0;
+
+        data_in_line = utility::print_chunk_vec(chunk_len_buf, data_per_line, data_in_line);
+        utility::print_chunk_vec(buf_final.to_vec(), data_per_line, data_in_line);
+
+        println!("\n");
+    }
+
     Ok(())
 }
 
@@ -527,20 +390,25 @@ fn print_comp_result(
     dict_data: u64,
     overhead_data: u64,
 ) -> Result<()> {
-    println!(
-        "\n\nLAYER RESULT: {} -> {} \nCOMPRESSED: {}. NON-COMPRESSED: {}. DICT: {}, OVERHEAD: {}",
-        path.metadata()?.len(),
-        path_comp.metadata()?.len(),
-        hit_data,
+    let size_before = path.metadata()?.len();
+    let size_after = path_comp.metadata()?.len();
+
+    if !(size_after < size_before) {
+        return Ok(());
+    }
+
+    println!("\nLAYER RESULT:\n{} Bytes -> {} Bytes", size_before, size_after);
+    println!("COMPRESSED: {} Bytes. NON-COMPRESSED: {} Bytes. DICTIONARIES: {} Bytes, OVERHEAD: {} Bytes",
+        hit_data / 2,
         miss_data,
         dict_data,
-        overhead_data
+        overhead_data,
     );
 
     if DEBUG_DICT {
         for dict in dictionaries {
             println!(
-                "\nDict 1: {}\n Dict 2: {}\n",
+                "Dict 1: {}\nDict 2: {}\n",
                 dict.0.to_string(),
                 dict.1.to_string()
             );

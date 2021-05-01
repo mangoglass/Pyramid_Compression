@@ -2,14 +2,16 @@ use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 pub const DEBUG: bool = true;
+pub const DETAILED_DEBUG: bool = true;
 pub const DEBUG_DICT: bool = true;
 
 pub const ELEM_BYTES: usize = 2;
 pub const ELEM_HALF: usize = ELEM_BYTES / 2;
 pub const ELEM_BITS: u8 = (ELEM_BYTES * 8) as u8;
-pub const ELEMS: usize = 1 << ELEM_BITS;
+pub const NR_ELEMS: usize = 1 << ELEM_BITS;
 pub const VALUE_BITS: u8 = ((ELEM_HALF * 8) - 1) as u8;
 pub const VALUES: usize = 1 << VALUE_BITS;
+pub const VALUES_HALF: usize = VALUES / 2;
 pub const CHUNK_MAX_SIZE: u64 = 790000;
 pub const MIN_OCCATIONS: u64 = 4;
 
@@ -61,4 +63,19 @@ pub fn u8_vec_to_u64(s: &Vec<u8>) -> u64 {
 
 pub fn file_is_larger(fa: &Path, fb: &Path) -> bool {
     fa.metadata().unwrap().len() > fb.metadata().unwrap().len()
+}
+
+pub fn print_chunk_vec(vec: Vec<u8>, per_line: i32, in_line: i32) -> i32 {
+    let mut mut_in_line = in_line;
+
+    for byte in vec.iter() {
+        print!("[{}]  \t", byte);
+        mut_in_line += 1;
+        if mut_in_line == per_line {
+            println!();
+            mut_in_line = 0;
+        }
+    }
+
+    mut_in_line
 }
