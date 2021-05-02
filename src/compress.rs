@@ -10,10 +10,7 @@ use crate::utility::{
 };
 
 pub fn run(path: &PathBuf) -> Result<PathBuf> {
-    println!(
-        "\nCompressing file: {}\n",
-        path.file_name().unwrap().to_str().unwrap()
-    );
+    println!("\nCompressing file: {}", path.file_name().unwrap().to_str().unwrap());
 
     let mut old_path = path.to_owned();
     let mut new_path = path.to_owned();
@@ -223,7 +220,8 @@ fn compress_chunk(
     }
 
     if !dry {
-        write_missed(&mut wri_buf, &mut res_buf);
+        mis_buf.extend(&res_buf); // add any elements in end of the chunk to buffered misses
+        write_missed(&mut wri_buf, &mut mis_buf);
         write_to_comp_file(&wri_buf, writer, dicts[0], dicts[1])?;
     } else if dry {
         reader.seek(SeekFrom::Start(start_pos))?;
@@ -302,7 +300,7 @@ fn write_missed(buf_write: &mut Vec<u8>, buf_missed: &[u8]) -> u64 {
     }
 
     if DETAILED_DEBUG {
-        println!("Missed {} Byte(s): {:?}", buf_missed.len(), buf_missed);
+        println!("Writing missed {} Byte(s) {:?}", buf_missed.len(), buf_missed);
     }
 
     buf_write.extend(buf_missed.to_vec());
@@ -366,7 +364,7 @@ fn write_to_comp_file(
     // add buf_write content to out file
     writer.write_all(&buf_final)?;
 
-    if DEBUG {
+    if DETAILED_DEBUG {
         println!("\nWriting chunk of length {} Bytes to file.\nRaw chunk data:", len);
 
         let data_per_line = 12;

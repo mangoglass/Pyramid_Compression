@@ -2,8 +2,8 @@ use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 pub const DEBUG: bool = true;
-pub const DETAILED_DEBUG: bool = true;
-pub const DEBUG_DICT: bool = true;
+pub const DETAILED_DEBUG: bool = false;
+pub const DEBUG_DICT: bool = false;
 
 pub const ELEM_BYTES: usize = 2;
 pub const ELEM_HALF: usize = ELEM_BYTES / 2;

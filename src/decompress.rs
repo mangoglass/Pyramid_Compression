@@ -98,7 +98,7 @@ fn decompress(path: &Path) -> Result<PathBuf> {
         if DEBUG {
             let old_l = old_path.metadata()?.len();
             let new_l = new_path.metadata()?.len();
-            println!("\nDecompressed layer {}   {} Bytes -> {} Bytes\n\n", layers - layer, old_l, new_l);
+            println!("Decompressed  layer {}  {} Bytes -> {} Bytes\n", layers - layer, old_l, new_l);
         }
 
         if layer > 0 {
@@ -152,20 +152,22 @@ fn decompress_chunk(writer: &mut Writer, reader: &mut Reader) -> Result<u64> {
     let chunk_total = utility::u8_vec_to_u32(&buf_chunk_total) as u64;
 
     if DEBUG {
+        println!("Decompressing chunk of length {} Bytes", chunk_total);
+    }
+
+    if DETAILED_DEBUG {
         let chunk_start = reader.seek(SeekFrom::Current(0))?;
         let mut chunk_vec = vec![0u8; (chunk_total - 4) as usize];
-        println!("reading {} Bytes", chunk_total - 4);
-        reader.read_exact(&mut chunk_vec)?;
+        reader.read(&mut chunk_vec)?;
         reader.seek(SeekFrom::Start(chunk_start))?;
 
-        println!("\nDecompressing chunk of length {} Bytes.\nRaw chunk data:", chunk_total);
+        println!("Raw chunk data:");
 
         let data_per_line = 12;
         let mut data_in_line = 0;
 
         data_in_line = utility::print_chunk_vec(buf_chunk_total.to_vec(), data_per_line, data_in_line);
         utility::print_chunk_vec(chunk_vec, data_per_line, data_in_line);
-
         println!("\n");
     }
 
