@@ -1,7 +1,7 @@
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
-pub const DEBUG: bool = true;
+pub const DEBUG: bool = false;
 pub const DETAILED_DEBUG: bool = false;
 pub const DEBUG_DICT: bool = false;
 
