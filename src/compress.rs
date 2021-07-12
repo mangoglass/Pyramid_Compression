@@ -163,7 +163,7 @@ fn compress_chunk(
     let to_read = dicts[0].coverage;
 
     // get start pos for reader to reset in dry run
-    let start_pos = reader.seek(SeekFrom::Current(0))?;
+    let start_pos = reader.stream_position()?;
 
     // start working through the file
     while has_read < to_read {
@@ -201,7 +201,7 @@ fn compress_chunk(
                     println!("Writing {} bytes from dictionary {}", h / 2, index);
                 }
 
-                reader.seek(SeekFrom::Current(-(ELEM_HALF as i64)))?;
+                reader.seek_relative(-(ELEM_HALF as i64))?;
                 has_read -= ELEM_HALF as u64;
                 mis_buf.extend(&rad_buf[0..ELEM_HALF]);
                 misses += ELEM_HALF as u64;
