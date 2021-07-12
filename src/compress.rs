@@ -269,7 +269,7 @@ fn manage_hits(
 
 fn increment_useages(buf_hits: &[u8], dict: &mut Dictionary) {
     for i in 0..buf_hits.len() {
-        dict.increment_useage(buf_hits[i] & 0b01111111);
+        dict.increment_usage(buf_hits[i] & 0b01111111);
     }
 }
 

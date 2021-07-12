@@ -1,4 +1,5 @@
 use crate::utility;
+use std::hash::{Hash, Hasher};
 
 #[derive(Eq, Clone, Copy)]
 pub struct DictElem {
@@ -7,14 +8,16 @@ pub struct DictElem {
     pub useage: u64,
 }
 
+impl Hash for DictElem {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.data[0].hash(state);
+        self.data[1].hash(state);
+    }
+}
+
 impl PartialEq for DictElem {
     fn eq(&self, other: &Self) -> bool {
-        for (self_elem, other_elem) in self.data.iter().zip(other.data.iter()) {
-            if self_elem != other_elem {
-                return false;
-            }
-        }
-        true
+        self.data[0] == other.data[0] && self.data[1] == other.data[1]
     }
 }
 
@@ -31,11 +34,11 @@ impl DictElem {
         self.data[0] == o[0] && self.data[1] == o[1]
     }
 
-    pub fn set_occurance(&mut self, occ: u64) {
+    pub fn set_occurrence(&mut self, occ: u64) {
         self.occurance = occ;
     }
 
-    pub fn increment_useage(&mut self) {
+    pub fn increment_usage(&mut self) {
         self.useage += 1;
     }
 
