@@ -19,3 +19,15 @@ Cargo.lock
 
 # Local History for Visual Studio Code
 .history/
+
+# ItelliJ
+.idea/*
+
+# Pyramid Compression
+/test*
+*.lc
+*.tmp*
+*.txt
+*.mp4
+*.png
+*.jpg
